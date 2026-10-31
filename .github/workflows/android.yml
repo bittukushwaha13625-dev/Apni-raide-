@@ -1,0 +1,53 @@
+name: Build APNI RIDE APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "*.zip"
+      - ".github/workflows/android.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get project files
+        uses: actions/checkout@v4
+
+      - name: Find and extract ZIP
+        run: |
+          ZIP=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "Project ZIP not found"
+            exit 1
+          fi
+          mkdir appsrc
+          unzip -q "$ZIP" -d appsrc
+
+      - name: Find Android project
+        id: locate
+        run: |
+          WRAPPER=$(find appsrc -type f -name gradlew | head -n 1)
+          if [ -z "$WRAPPER" ]; then
+            echo "gradlew not found in ZIP"
+            exit 1
+          fi
+          echo "project_dir=$(dirname "$WRAPPER")" >> "$GITHUB_OUTPUT"
+          chmod +x "$WRAPPER"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build APK
+        working-directory: ${{ steps.locate.outputs.project_dir }}
+        run: ./gradlew assembleDebug
+
+      - name: Save APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: APNI-RIDE-APK
+          path: ${{ steps.locate.outputs.project_dir }}/app/build/outputs/apk/debug/*.apk
